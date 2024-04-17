@@ -12,6 +12,34 @@ def create_database():
     conn.commit()
     conn.close()
 
+# Function to create a new SQLite3 database and table for user accounts
+def create_user_database():
+    conn = sqlite3.connect('users.db')
+    c = conn.cursor()
+    c.execute('''CREATE TABLE IF NOT EXISTS users
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                 username TEXT UNIQUE NOT NULL,
+                 password TEXT NOT NULL)''')
+    conn.commit()
+    conn.close()
+
+# Function to register a new user
+def register_user(username, password):
+    conn = sqlite3.connect('users.db')
+    c = conn.cursor()
+    c.execute("INSERT INTO users (username, password) VALUES (?, ?)", (username, password))
+    conn.commit()
+    conn.close()
+
+# Function to authenticate a user
+def authenticate_user(username, password):
+    conn = sqlite3.connect('users.db')
+    c = conn.cursor()
+    c.execute("SELECT * FROM users WHERE username=? AND password=?", (username, password))
+    user = c.fetchone()
+    conn.close()
+    return user
+
 # Function to add a new post to the database
 def add_post(title, content):
     conn = sqlite3.connect('blog.db')
@@ -54,6 +82,41 @@ def get_post_by_id(post_id):
     conn.close()
     return post
 
+# Streamlit interface for user registration
+def registration():
+    st.title("User Registration")
+    username = st.text_input("Enter username:")
+    password = st.text_input("Enter password:", type="password")
+    if st.button("Register"):
+        if username and password:
+            create_user_database()
+            register_user(username, password)
+            st.success("Registration successful! Please login.")
+        else:
+            st.warning("Please enter both username and password.")
+
+# Streamlit interface for user login
+def login():
+    st.title("User Login")
+    username = st.text_input("Enter username:")
+    password = st.text_input("Enter password:", type="password")
+    if st.button("Login"):
+        if username and password:
+            user = authenticate_user(username, password)
+            if user:
+                st.success(f"Welcome, {username}!")
+                st.session_state.logged_in = True
+            else:
+                st.error("Invalid username or password.")
+        else:
+            st.warning("Please enter both username and password.")
+
+# Streamlit interface for user logout
+def logout():
+    if st.button("Logout"):
+        st.session_state.logged_in = False
+        st.success("You have been logged out.")
+
 # Streamlit interface
 def main():
     st.title("Simple Blog with Streamlit and SQLite3")
@@ -63,9 +126,21 @@ def main():
 
     # Sidebar
     st.sidebar.header("Menu")
-    menu_choice = st.sidebar.selectbox("Select operation", ("Add Post", "Edit Post", "Delete Post", "View Posts"))
+    if 'logged_in' not in st.session_state:
+        st.session_state.logged_in = False
 
-    if menu_choice == "Add Post":
+    if st.session_state.logged_in:
+        menu_choice = st.sidebar.selectbox("Select operation", ("Add Post", "Edit Post", "Delete Post", "View Posts", "Logout"))
+    else:
+        menu_choice = st.sidebar.selectbox("Select operation", ("Login", "Register"))
+
+    if menu_choice == "Register":
+        registration()
+    elif menu_choice == "Login":
+        login()
+    elif menu_choice == "Logout":
+        logout()
+    elif menu_choice == "Add Post" and st.session_state.logged_in:
         st.header("Add New Post")
         title = st.text_input("Enter title:")
         content = st.text_area("Enter content:")
@@ -76,7 +151,7 @@ def main():
             else:
                 st.warning("Please enter both title and content.")
 
-    elif menu_choice == "Edit Post":
+    elif menu_choice == "Edit Post" and st.session_state.logged_in:
         st.header("Edit Post")
         post_id = st.number_input("Enter post ID to edit:")
         if post_id:
@@ -92,7 +167,7 @@ def main():
             else:
                 st.warning("Post not found.")
 
-    elif menu_choice == "Delete Post":
+    elif menu_choice == "Delete Post" and st.session_state.logged_in:
         st.header("Delete Post")
         post_id = st.number_input("Enter post ID to delete:")
         if st.button("Delete Post"):
